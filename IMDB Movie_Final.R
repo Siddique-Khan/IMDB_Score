@@ -1,0 +1,313 @@
+library(ggplot2) # Data visualization
+library(readr) # CSV file I/O, e.g. the read_csv function
+
+#Building Model with Initial Variables
+movie_data1 =read.csv('movie_metadata.csv', header=TRUE)
+head(movie_data1)
+
+# select non-text variables for this homework
+select_columns1 = c('imdb_score', 'num_user_for_reviews', 'num_critic_for_reviews', 'duration', 
+                    'director_facebook_likes', 'movie_facebook_likes', 'cast_total_facebook_likes',
+                    'actor_1_facebook_likes', 'actor_2_facebook_likes', 'actor_3_facebook_likes',
+                    'gross', 'num_voted_users', 'facenumber_in_poster', 'budget', 
+                    'title_year', 'aspect_ratio')
+
+movie_data2 = movie_data1[,select_columns1]
+head(movie_data2)
+
+
+###################################
+### logistic regression
+# first to check the correlations between variables
+cor(movie_data2)
+n_predictors1 = dim(movie_data2[,select_columns1[-1]])[2]
+n_predictors1
+cor_matrix1 = matrix(0, n_predictors1, n_predictors1)
+cor_matrix1
+for (i in seq(n_predictors1)){
+  for (j in seq(n_predictors1)){
+    cor_matrix1[i,j] = cor.test(as.numeric(movie_data2[,i+1]), as.numeric(movie_data2[,j+1]))$est    
+  }
+}
+cor_matrix1
+
+library (caret) 
+inTrain1 = createDataPartition (movie_data2[,'imdb_score'], p=0.8, list= FALSE ) 
+training1 = movie_data2[inTrain1,] 
+validation1 = movie_data2[-inTrain1,] 
+
+movie.linear1 = lm(imdb_score~. - imdb_score, data=training1)
+summary(movie.linear1)
+
+# make prediction on the validation data
+predicted.linear1 = predict(movie.linear1, validation1)
+# calculate the sum of squared error
+sum((validation$imdb_score - predicted.linear1)^2, na.rm=T)
+plot(predicted.linear1)
+
+
+
+#Building the Model With modified Variables.
+
+movie_data3 =read.csv('movie_data_final.csv', header=TRUE)
+head(movie_data3)
+
+select_columns = c('imdb_score', 'duration', 'director_facebook_likes', 'cast_total_facebook_likes',
+                   'actor_1_facebook_likes', 'actor_2_facebook_likes', 'actor_3_facebook_likes',
+                   'facenumber_in_poster', 'budget','genres_score','director_score',
+                   'actor_1_score','actor_2_score','actor_3_score')
+
+movie_data4 = movie_data3[,select_columns]
+
+for(i in 1:ncol(movie_data4)){
+  movie_data4[is.na(movie_data4[,i]), i] <- mean(movie_data4[,i], na.rm = TRUE)
+}
+head(movie_data4)
+
+cor(movie_data4)
+
+#regression
+
+n_predictors = dim(movie_data4[,select_columns])[2]
+n_predictors
+cor_matrix = matrix(0, n_predictors, n_predictors)
+cor_matrix
+for (i in seq(n_predictors)){
+  for (j in seq(n_predictors)){
+    cor_matrix[i,j] = cor.test(as.numeric(movie_data4[,i]), as.numeric(movie_data4[,j]))$est    
+  }
+}
+cor_matrix
+
+library (caret) 
+inTrain = createDataPartition (movie_data4[,'imdb_score'], p=0.8, list= FALSE ) 
+training = movie_data4[inTrain,] 
+validation = movie_data4[-inTrain,] 
+
+movie.linear = lm(imdb_score ~. - imdb_score, data=training)
+summary(movie.linear)
+#movie.logistic = glm(imdb_score ~. - imdb_score, family=binomial(link=logit), data=training)
+#summary(movie.logistic)
+
+
+# make prediction on the validation data
+predicted.linear = predict(movie.linear, validation)
+# calculate the sum of squared error
+sum((validation$imdb_score - predicted.linear)^2, na.rm=T)
+#ANOVA Analysis
+mod1<-aov(imdb_score~director_score*actor_1_score*actor_2_score*budget,data=movie_data4)
+summary(mod1)
+
+
+predict(movie.linear,data.frame(duration=135,director_facebook_likes=50000,
+                                cast_total_facebook_likes=100000,actor_1_facebook_likes=35000,
+                                actor_2_facebook_likes=30000,actor_3_facebook_likes=15000,
+                                gross=200000000,facenumber_in_poster=3,budget=100000000,
+                                genres_score=6.7,director_score=8,actor_1_score=7.5,
+                                actor_2_score=6,actor_3_score=6.3),interval="prediction",level=0.95)
+
+### random forest 
+library(randomForest)
+movie_data5 = movie_data4
+
+training = movie_data5[inTrain,] 
+validation = movie_data5[-inTrain,] 
+movie.rf = randomForest(imdb_score~.-imdb_score,data=training, mtry=6,importance=TRUE)
+movie.rf
+summary(movie.rf)
+predicted.rf = predict(movie.rf,newdata=validation)
+# calculate the sum of squared error
+sum((validation$imdb_score - predicted.rf)^2, na.rm=T)
+
+
+### boosting
+library(gbm)
+# we can use the same data as we do for random forest
+movie.boost=gbm(imdb_score~.-imdb_score,data=training,distribution="gaussian",n.trees=5000,interaction.depth=4)
+summary(movie.boost)
+predicted.boost=predict(movie.boost,newdata=validation,n.trees=5000)
+# calculate the sum of squared error
+sum((validation$imdb_score - predicted.boost)^2, na.rm=T)
+
+
+
+### neural networks 
+library(neuralnet)
+library(nnet)
+# first transform rating scores to categorial class labels from 1 to 10
+class_1to10 = class.ind(round(training$imdb_score))
+colnames(class_1to10) = paste('C', colnames(class_1to10), sep='')
+head(class_1to10)
+training2 = cbind(training, class_1to10)
+movie.nn = neuralnet(C2+C3+C4+C5+C6+C7+C8+C9+C10 ~ duration+director_facebook_likes+
+                       cast_total_facebook_likes+actor_1_facebook_likes+
+                       actor_2_facebook_likes+actor_3_facebook_likes+
+                       facenumber_in_poster+budget+
+                       genres_score+director_score+actor_1_score+
+                       actor_2_score+actor_3_score, 
+                     data=training2, hidden=c(5))
+plot(movie.nn)
+predicted.nn = compute(movie.nn, validation[,2:14])$net.result
+predicted.nn = apply(predicted.nn, 1, which.max) # predict final output score by comparing between all outputs
+# calculate the sum of squared error
+sum((validation$imdb_score - predicted.nn)^2, na.rm=T)
+
+# alternatively we can use one output node and consider it as a continuous output
+movie.nn2 = neuralnet( imdb_score ~ duration+director_facebook_likes+
+                         cast_total_facebook_likes+actor_1_facebook_likes+
+                         actor_2_facebook_likes+actor_3_facebook_likes+
+                         facenumber_in_poster+budget+
+                         genres_score+director_score+actor_1_score+
+                         actor_2_score+actor_3_score, 
+                       data=training, hidden=c(3))
+plot(movie.nn2)
+predicted.nn2 = compute(movie.nn2, validation[,2:14])$net.result
+# calculate the sum of squared error
+sum((validation$imdb_score - predicted.nn2)^2, na.rm=T)
+
+
+#Predecting Gross
+
+library(dplyr)
+movie_data6 =read.csv('movie_data_final.csv', header=TRUE)
+head(movie_data6)
+movie_data7<-filter(movie_data6,country=="USA")
+
+select_columns2 = c('gross','duration', 'director_facebook_likes', 'cast_total_facebook_likes',
+                    'actor_1_facebook_likes', 'actor_2_facebook_likes', 'actor_3_facebook_likes',
+                    'facenumber_in_poster', 'budget','genres_score','director_score',
+                    'actor_1_score','actor_2_score','actor_3_score')
+
+movie_data8 = movie_data7[,select_columns2]
+
+for(i in 1:ncol(movie_data8)){
+  movie_data8[is.na(movie_data8[,i]), i] <- mean(movie_data8[,i], na.rm = TRUE)
+}
+head(movie_data8)
+
+cor(movie_data8)
+
+#regression
+
+n_predictors2 = dim(movie_data8[,select_columns2])[2]
+n_predictors2
+cor_matrix2 = matrix(0, n_predictors2, n_predictors2)
+cor_matrix2
+for (i in seq(n_predictors2)){
+  for (j in seq(n_predictors2)){
+    cor_matrix2[i,j] = cor.test(as.numeric(movie_data8[,i]), as.numeric(movie_data8[,j]))$est    
+  }
+}
+cor_matrix2
+
+library (caret) 
+inTrain2 = createDataPartition (movie_data8[,'gross'], p=0.8, list= FALSE ) 
+training4 = movie_data8[inTrain2,] 
+validation4 = movie_data8[-inTrain2,] 
+
+movie.linear2 = lm(gross ~. - gross, data=training4)
+summary(movie.linear2)
+#movie.logistic = glm(imdb_score ~. - imdb_score, family=binomial(link=logit), data=training)
+#summary(movie.logistic)
+
+
+# make prediction on the validation data
+predicted.linear2 = predict(movie.linear2, validation4)
+# calculate the sum of squared error
+sum((validation4$gross - predicted.linear2)^2, na.rm=T)
+#ANOVA Analysis
+mod2<-aov(gross~director_score*actor_1_score*actor_2_score*budget,data=movie_data8)
+summary(mod2)
+
+
+predict(movie.linear2,data.frame(duration=135,director_facebook_likes=50000,
+                                 cast_total_facebook_likes=100000,actor_1_facebook_likes=35000,
+                                 actor_2_facebook_likes=30000,actor_3_facebook_likes=15000,
+                                 gross=200000000,facenumber_in_poster=3,budget=100000000,
+                                 genres_score=6.7,director_score=8,actor_1_score=7.5,
+                                 actor_2_score=6,actor_3_score=6.3),interval="prediction",level=0.95)
+
+
+###################################
+### deep learning
+library (h2o) 
+
+# start a local h2o cluster 
+local.h2o <- h2o.init (ip = "localhost" , port = 54321, startH2O = TRUE , nthreads=-1) 
+
+# pass dataframe from inside of the R environment to the H2O instance 
+trData<- as.h2o (training) 
+vaData<- as.h2o (validation) 
+
+# choose to use the setting for regression
+movie.dl_regression <- h2o.deeplearning(x=2:16, y=1, trData, hidden=rep(100,5), regression_stop=0.001)
+
+# use model to predict validation dataset 
+pred.dl = h2o.predict (object=movie.dl_regression, newdata=vaData) 
+predicted.dl = as.data.frame (pred.dl) 
+# calculate the sum of squared error
+sum((validation$imdb_score - predicted.dl)^2, na.rm=T)
+
+# use model to predict training dataset 
+pred.dl = h2o.predict (object=movie.dl_regression, newdata=trData) 
+predicted.dl = as.data.frame (pred.dl) 
+# calculate the sum of squared error
+sum((training$imdb_score - predicted.dl)^2, na.rm=T)
+
+
+
+# use model to predict validation dataset 
+pred.dl = h2o.predict (object=movie.dl_regression, newdata=vaData[,c(-1,-17)]) 
+predicted.dl = as.data.frame (pred.dl) 
+# calculate the sum of squared error
+sum((validation$imdb_score - predicted.dl)^2, na.rm=T)
+
+
+#Clustering
+
+clustdata<- scale(movie_data4)
+
+# Determine number of clusters
+wss <- (nrow(clustdata)-1)*sum(apply(clustdata,2,var))
+for (i in 1:10) wss[i] <- sum(kmeans(clustdata, 
+                                     centers=i)$withinss)
+plot(1:10, wss, type="b", xlab="Number of Clusters",
+     ylab="Within groups sum of squares")
+
+
+# K-Means Cluster Analysis
+fit <- kmeans(clustdata, 5) # 5 cluster solution
+
+# get cluster means 
+aggregate(clustdata,by=list(fit$cluster),FUN=mean)
+# append cluster assignment
+clustdata <- data.frame(clustdata, fit$cluster)
+
+
+# Ward Hierarchical Clustering with Bootstrapped p values
+library(pvclust)
+fit <- pvclust(clustdata, method.hclust="ward",
+               method.dist="euclidean")
+plot(fit) # dendogram with p values
+# add rectangles around groups highly supported by the data
+pvrect(fit, alpha=.95)
+
+# Model Based Clustering
+library(mclust)
+fit <- Mclust(clustdata)
+summary(fit) # display the best model
+
+
+# K-Means Clustering with 5 clusters
+fit <- kmeans(clustdata, 5)
+
+# Cluster Plot against 1st 2 principal components
+
+# vary parameters for most readable graph
+library(cluster) 
+clusplot(clustdata, fit$cluster, color=TRUE, shade=TRUE, 
+         labels=2, lines=0)
+
+# Centroid Plot against 1st 2 discriminant functions
+library(fpc)
+plotcluster(clustdata, fit$cluster)
