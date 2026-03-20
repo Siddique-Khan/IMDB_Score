@@ -166,7 +166,7 @@ predicted.nn2 = compute(movie.nn2, validation[,2:14])$net.result
 sum((validation$imdb_score - predicted.nn2)^2, na.rm=T)
 
 
-#Predecting Gross
+#Predecting Gross Income
 
 library(dplyr)
 movie_data6 =read.csv('movie_data_final.csv', header=TRUE)
