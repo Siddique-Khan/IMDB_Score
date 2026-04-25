@@ -19,6 +19,7 @@ head(movie_data2)
 ###################################
 ### logistic regression
 # first to check the correlations between variables
+
 cor(movie_data2)
 n_predictors1 = dim(movie_data2[,select_columns1[-1]])[2]
 n_predictors1
@@ -47,7 +48,7 @@ plot(predicted.linear1)
 
 
 
-#Building the Model With modified Variables.
+#Building the Model With modified Variables
 
 movie_data3 =read.csv('movie_data_final.csv', header=TRUE)
 head(movie_data3)
@@ -91,6 +92,7 @@ summary(movie.linear)
 
 
 # make prediction on the validation data
+
 predicted.linear = predict(movie.linear, validation)
 # calculate the sum of squared error
 sum((validation$imdb_score - predicted.linear)^2, na.rm=T)
